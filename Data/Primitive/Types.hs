@@ -117,6 +117,9 @@ class Prim a where
     -> State# s
   setByteArray# = defaultSetByteArray#
 
+  -- | Read a value from the array. The offset is in bytes.
+  indexWord8ByteArrayAs# :: ByteArray# -> Int# -> a
+
   -- | Read a value from a memory position given by an address and an offset.
   -- The memory block the address refers to must be immutable. The offset is in
   -- elements of type @a@ rather than in bytes.
@@ -142,6 +145,7 @@ class Prim a where
   setOffAddr# = defaultSetOffAddr#
 
   {-# MINIMAL (sizeOfType# | sizeOf#), (alignmentOfType# | alignment#), indexByteArray#, readByteArray#, writeByteArray#,
+    indexWord8ByteArrayAs#,
     indexOffAddr#, readOffAddr#, writeOffAddr# #-}
 
 -- | A dummy value of type @a@.
@@ -200,6 +204,10 @@ instance Prim a => Prim (Complex a) where
     \s0 -> case writeByteArray# arr# (2# *# i#) a s0 of
        s1 -> case writeByteArray# arr# (2# *# i# +# 1#) b s1 of
          s2 -> s2
+  indexWord8ByteArrayAs# arr# i# =
+    let x = indexWord8ByteArrayAs# arr# i#
+        y = indexWord8ByteArrayAs# arr# (i# +# (sizeOf# (undefined :: a)))
+    in x :+ y
   indexOffAddr# addr# i# =
     let x = indexOffAddr# addr# (2# *# i#)
         y = indexOffAddr# addr# (2# *# i# +# 1#)
@@ -217,6 +225,7 @@ instance Prim a => Prim (Complex a) where
   {-# INLINE indexByteArray# #-}
   {-# INLINE readByteArray# #-}
   {-# INLINE writeByteArray# #-}
+  {-# INLINE indexWord8ByteArrayAs# #-}
   {-# INLINE indexOffAddr# #-}
   {-# INLINE readOffAddr# #-}
   {-# INLINE writeOffAddr# #-}
@@ -289,7 +298,7 @@ instance Prim a => Storable (PrimStorable a) where
   pokeElemOff (Ptr addr#) (I# i#) (PrimStorable a) = primitive_ $ \s# ->
     writeOffAddr# addr# i# a s#
 
-#define derivePrim(ty, ctr, sz, align, idx_arr, rd_arr, wr_arr, set_arr, idx_addr, rd_addr, wr_addr, set_addr) \
+#define derivePrim(ty, ctr, sz, align, idx_arr, rd_arr, wr_arr, set_arr, idx_arr_w8, idx_addr, rd_addr, wr_addr, set_addr) \
 instance Prim (ty) where {                                        \
   sizeOfType# _ = unI# sz                                         \
 ; alignmentOfType# _ = unI# align                                 \
@@ -303,6 +312,7 @@ instance Prim (ty) where {                                        \
           } in                                                    \
       case unsafeCoerce# (internal (set_arr arr# i n x#)) s# of   \
         { (# s1#, _ #) -> s1# }                                   \
+; indexWord8ByteArrayAs# addr# i# = ctr (idx_arr_w8 addr# i#)    \
                                                                   \
 ; indexOffAddr# addr# i# = ctr (idx_addr addr# i#)                \
 ; readOffAddr#  addr# i# s# = case rd_addr addr# i# s# of         \
@@ -320,6 +330,7 @@ instance Prim (ty) where {                                        \
 ; {-# INLINE readByteArray# #-}                                   \
 ; {-# INLINE writeByteArray# #-}                                  \
 ; {-# INLINE setByteArray# #-}                                    \
+; {-# INLINE indexWord8ByteArrayAs# #-}                           \
 ; {-# INLINE indexOffAddr# #-}                                    \
 ; {-# INLINE readOffAddr# #-}                                     \
 ; {-# INLINE writeOffAddr# #-}                                    \
@@ -347,51 +358,67 @@ unI# (I# n#) = n#
 
 derivePrim(Word, W#, sIZEOF_WORD, aLIGNMENT_WORD,
            indexWordArray#, readWordArray#, writeWordArray#, setWordArray#,
+           indexWord8ArrayAsWord#,
            indexWordOffAddr#, readWordOffAddr#, writeWordOffAddr#, setWordOffAddr#)
 derivePrim(Word8, W8#, sIZEOF_WORD8, aLIGNMENT_WORD8,
            indexWord8Array#, readWord8Array#, writeWord8Array#, shimmedSetWord8Array#,
+           indexWord8Array#,
            indexWord8OffAddr#, readWord8OffAddr#, writeWord8OffAddr#, setWord8OffAddr#)
 derivePrim(Word16, W16#, sIZEOF_WORD16, aLIGNMENT_WORD16,
            indexWord16Array#, readWord16Array#, writeWord16Array#, setWord16Array#,
+           indexWord8ArrayAsWord16#,
            indexWord16OffAddr#, readWord16OffAddr#, writeWord16OffAddr#, setWord16OffAddr#)
 derivePrim(Word32, W32#, sIZEOF_WORD32, aLIGNMENT_WORD32,
            indexWord32Array#, readWord32Array#, writeWord32Array#, setWord32Array#,
+           indexWord8ArrayAsWord32#,
            indexWord32OffAddr#, readWord32OffAddr#, writeWord32OffAddr#, setWord32OffAddr#)
 derivePrim(Word64, W64#, sIZEOF_WORD64, aLIGNMENT_WORD64,
            indexWord64Array#, readWord64Array#, writeWord64Array#, setWord64Array#,
+           indexWord8ArrayAsWord64#,
            indexWord64OffAddr#, readWord64OffAddr#, writeWord64OffAddr#, setWord64OffAddr#)
 derivePrim(Int, I#, sIZEOF_INT, aLIGNMENT_INT,
            indexIntArray#, readIntArray#, writeIntArray#, setIntArray#,
+           indexWord8ArrayAsInt#,
            indexIntOffAddr#, readIntOffAddr#, writeIntOffAddr#, setIntOffAddr#)
 derivePrim(Int8, I8#, sIZEOF_INT8, aLIGNMENT_INT8,
            indexInt8Array#, readInt8Array#, writeInt8Array#, shimmedSetInt8Array#,
+           indexInt8Array#,
            indexInt8OffAddr#, readInt8OffAddr#, writeInt8OffAddr#, setInt8OffAddr#)
 derivePrim(Int16, I16#, sIZEOF_INT16, aLIGNMENT_INT16,
            indexInt16Array#, readInt16Array#, writeInt16Array#, setInt16Array#,
+           indexWord8ArrayAsInt16#,
            indexInt16OffAddr#, readInt16OffAddr#, writeInt16OffAddr#, setInt16OffAddr#)
 derivePrim(Int32, I32#, sIZEOF_INT32, aLIGNMENT_INT32,
            indexInt32Array#, readInt32Array#, writeInt32Array#, setInt32Array#,
+           indexWord8ArrayAsInt32#,
            indexInt32OffAddr#, readInt32OffAddr#, writeInt32OffAddr#, setInt32OffAddr#)
 derivePrim(Int64, I64#, sIZEOF_INT64, aLIGNMENT_INT64,
            indexInt64Array#, readInt64Array#, writeInt64Array#, setInt64Array#,
+           indexWord8ArrayAsInt64#,
            indexInt64OffAddr#, readInt64OffAddr#, writeInt64OffAddr#, setInt64OffAddr#)
 derivePrim(Float, F#, sIZEOF_FLOAT, aLIGNMENT_FLOAT,
            indexFloatArray#, readFloatArray#, writeFloatArray#, setFloatArray#,
+           indexWord8ArrayAsFloat#,
            indexFloatOffAddr#, readFloatOffAddr#, writeFloatOffAddr#, setFloatOffAddr#)
 derivePrim(Double, D#, sIZEOF_DOUBLE, aLIGNMENT_DOUBLE,
            indexDoubleArray#, readDoubleArray#, writeDoubleArray#, setDoubleArray#,
+           indexWord8ArrayAsDouble#,
            indexDoubleOffAddr#, readDoubleOffAddr#, writeDoubleOffAddr#, setDoubleOffAddr#)
 derivePrim(Char, C#, sIZEOF_CHAR, aLIGNMENT_CHAR,
            indexWideCharArray#, readWideCharArray#, writeWideCharArray#, setWideCharArray#,
+           indexWord8ArrayAsWideChar#,
            indexWideCharOffAddr#, readWideCharOffAddr#, writeWideCharOffAddr#, setWideCharOffAddr#)
 derivePrim(Ptr a, Ptr, sIZEOF_PTR, aLIGNMENT_PTR,
            indexAddrArray#, readAddrArray#, writeAddrArray#, setAddrArray#,
+           indexWord8ArrayAsAddr#,
            indexAddrOffAddr#, readAddrOffAddr#, writeAddrOffAddr#, setAddrOffAddr#)
 derivePrim(StablePtr a, StablePtr, sIZEOF_PTR, aLIGNMENT_PTR,
            indexStablePtrArray#, readStablePtrArray#, writeStablePtrArray#, setStablePtrArray#,
+           indexWord8ArrayAsStablePtr#,
            indexStablePtrOffAddr#, readStablePtrOffAddr#, writeStablePtrOffAddr#, setStablePtrOffAddr#)
 derivePrim(FunPtr a, FunPtr, sIZEOF_PTR, aLIGNMENT_PTR,
            indexAddrArray#, readAddrArray#, writeAddrArray#, setAddrArray#,
+           indexWord8ArrayAsAddr#,
            indexAddrOffAddr#, readAddrOffAddr#, writeAddrOffAddr#, setAddrOffAddr#)
 
 -- Prim instances for newtypes in Foreign.C.Types
@@ -506,6 +533,7 @@ instance Prim WordPtr where
     (# s1, p #) -> (# s1, ptrToWordPtr p #)
   writeByteArray# a i wp = writeByteArray# a i (wordPtrToPtr wp)
   setByteArray# a i n wp = setByteArray# a i n (wordPtrToPtr wp)
+  indexWord8ByteArrayAs# a i = ptrToWordPtr (indexWord8ByteArrayAs# a i)
   indexOffAddr# a i = ptrToWordPtr (indexOffAddr# a i)
   readOffAddr# a i s0 = case readOffAddr# a i s0 of
     (# s1, p #) -> (# s1, ptrToWordPtr p #)
@@ -521,6 +549,7 @@ instance Prim IntPtr where
     (# s1, p #) -> (# s1, ptrToIntPtr p #)
   writeByteArray# a i wp = writeByteArray# a i (intPtrToPtr wp)
   setByteArray# a i n wp = setByteArray# a i n (intPtrToPtr wp)
+  indexWord8ByteArrayAs# a i = ptrToIntPtr (indexWord8ByteArrayAs# a i)
   indexOffAddr# a i = ptrToIntPtr (indexOffAddr# a i)
   readOffAddr# a i s0 = case readOffAddr# a i s0 of
     (# s1, p #) -> (# s1, ptrToIntPtr p #)
